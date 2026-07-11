@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title_suffix %} – Audit Log{% endblock %}
+
+{% block content %}
+<h1>Audit Log</h1>
+
+{% if error %}
+<div class="flash flash-error">{{ error }}</div>
+{% endif %}
+
+{% if lines %}
+<table>
+  <thead>
+    <tr>
+      <th>Log Entry</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for line in lines %}
+    <tr>
+      <td><code>{{ line }}</code></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="muted">No audit log entries yet.</p>
+{% endif %}
+{% endblock %}

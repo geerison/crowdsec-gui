@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title_suffix %} – Alerts{% endblock %}
+
+{% block content %}
+<h1>Recent Alerts</h1>
+
+{% if error %}
+<div class="flash flash-error">{{ error }}</div>
+{% endif %}
+
+<form method="get" class="filter-form">
+  <input type="text" name="ip" placeholder="Filter by source IP" value="{{ filter_ip }}" class="text-input">
+  <input type="text" name="scenario" placeholder="Filter by scenario" value="{{ filter_scenario }}" class="text-input">
+  <button type="submit" class="btn">Filter</button>
+  <a href="{{ url_for('alerts') }}" class="btn btn-secondary">Clear</a>
+</form>
+
+<p>{{ alerts|length }} alert(s) shown.</p>
+
+{% if alerts %}
+<table>
+  <thead>
+    <tr>
+      <th>Source IP</th>
+      <th>Scenario</th>
+      <th>Created</th>
+      <th>Decisions</th>
+      <th>Machine</th>
+      <th>Country</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for a in alerts %}
+    <tr>
+      <td><code>{{ a.source.ip if a.source else '—' }}</code></td>
+      <td>{{ a.scenario }}</td>
+      <td>{{ a.created_at }}</td>
+      <td>{{ a.decisions_count if a.decisions_count is defined else (a.decisions|length if a.decisions else 0) }}</td>
+      <td>{{ a.machine_id if a.machine_id else '—' }}</td>
+      <td>{{ a.source.cn if a.source else '—' }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="muted">No alerts found.</p>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,25 @@
+[Unit]
+Description=CrowdSec GUI Helper Service
+After=network.target docker.service
+Wants=docker.service
+
+[Service]
+Type=simple
+User=crowdsec-gui
+Group=crowdsec-gui
+WorkingDirectory=/opt/crowdsec-gui/helper
+EnvironmentFile=/opt/crowdsec-gui/.env
+ExecStart=/opt/crowdsec-gui/venv/bin/python /opt/crowdsec-gui/helper/helper.py
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+# Security hardening
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ReadWritePaths=/opt/crowdsec-gui/helper
+
+[Install]
+WantedBy=multi-user.target

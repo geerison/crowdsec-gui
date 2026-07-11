@@ -1,0 +1,19 @@
+# /etc/sudoers.d/crowdsec-gui
+# Allow the crowdsec-gui user to run only the specific helper scripts as root.
+# These scripts in turn call: docker exec crowdsec cscli ...
+#
+# Install with:
+#   sudo cp helper/sudoers.crowdsec-gui /etc/sudoers.d/crowdsec-gui
+#   sudo chmod 440 /etc/sudoers.d/crowdsec-gui
+#   sudo visudo -c   # verify syntax
+
+User_Alias  CROWDSECUI  = crowdsec-gui
+
+Cmnd_Alias  CROWDSEC_LIST  = \
+    /opt/crowdsec-gui/helper/crowdsec-list-decisions.sh, \
+    /opt/crowdsec-gui/helper/crowdsec-list-alerts.sh
+
+Cmnd_Alias  CROWDSEC_UNBAN = \
+    /opt/crowdsec-gui/helper/crowdsec-unban.sh *
+
+CROWDSECUI ALL=(root) NOPASSWD: CROWDSEC_LIST, CROWDSEC_UNBAN
