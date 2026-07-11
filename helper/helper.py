@@ -44,17 +44,29 @@ def write_audit(action, target_ip, result, requester_ip=None):
         app.logger.error(f"Audit log write failed: {e}")
 
 
-def run_script(script_name, args=None):
+def run_script(script_name):
     script = os.path.join(SCRIPTS_DIR, script_name)
-    cmd = ["sudo", script] + (args or [])
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
+    result = subprocess.run(["sudo", script], capture_output=True, text=True, timeout=15)
+    return result.stdout, result.stderr, result.returncode
+
+
+def run_unban_script(ip):
+    """Pass the validated IP via stdin to avoid putting user data on the command line."""
+    script = os.path.join(SCRIPTS_DIR, "crowdsec-unban.sh")
+    result = subprocess.run(
+        ["sudo", script],
+        input=ip,
+        capture_output=True,
+        text=True,
+        timeout=15,
+    )
     return result.stdout, result.stderr, result.returncode
 
 
 @app.route("/decisions")
 def decisions():
     check_secret()
-    stdout, stderr, rc = run_script("crowdsec-list-decisions.sh")
+    stdout, stderr, rc = run_script("crowdsec-list-decisions.sh")  # noqa: no user data
     if rc != 0:
         return jsonify({"error": stderr.strip()}), 500
     try:
@@ -91,7 +103,7 @@ def unban():
         write_audit("unban_rejected", ip, "invalid_ip", request.remote_addr)
         return jsonify({"error": "Invalid IP"}), 400
 
-    stdout, stderr, rc = run_script("crowdsec-unban.sh", [ip])
+    stdout, stderr, rc = run_unban_script(ip)
     if rc != 0:
         write_audit("unban", ip, f"failed: {stderr.strip()}", request.remote_addr)
         return jsonify({"error": stderr.strip()}), 500
@@ -110,7 +122,8 @@ def audit():
     except FileNotFoundError:
         return jsonify({"lines": []})
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        app.logger.error(f"Audit log read failed: {e}")
+        return jsonify({"error": "Failed to read audit log"}), 500
 
 
 if __name__ == "__main__":
