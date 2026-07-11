@@ -1,0 +1,29 @@
+crowdsec.example.com {
+    # Basic auth — replace hash with output of: caddy hash-password --plaintext "yourpassword"
+    basicauth {
+        admin $2a$14$REPLACE_THIS_WITH_A_REAL_BCRYPT_HASH
+    }
+
+    # Optional: restrict to your IP only (uncomment and set your IP)
+    # @allowed {
+    #     remote_ip YOUR.IP.ADDRESS/32
+    # }
+    # handle @allowed {
+    #     reverse_proxy 127.0.0.1:8088
+    # }
+    # respond "Forbidden" 403
+
+    reverse_proxy 127.0.0.1:8088
+
+    # Security headers
+    header {
+        X-Content-Type-Options nosniff
+        X-Frame-Options DENY
+        Referrer-Policy strict-origin-when-cross-origin
+    }
+
+    # TLS is automatic with Caddy — just ensure DNS points to this server
+    tls {
+        # Caddy will obtain a Let's Encrypt cert automatically
+    }
+}

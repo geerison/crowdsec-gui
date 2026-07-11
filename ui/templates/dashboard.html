@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title_suffix %} – Dashboard{% endblock %}
+
+{% block content %}
+<h1>Dashboard</h1>
+
+{% if error %}
+<div class="flash flash-error">{{ error }}</div>
+{% endif %}
+
+<div class="card-grid">
+  <div class="card {% if crowdsec_ok %}card-ok{% else %}card-error{% endif %}">
+    <div class="card-label">CrowdSec Status</div>
+    <div class="card-value">{{ "✅ Reachable" if crowdsec_ok else "❌ Unreachable" }}</div>
+  </div>
+
+  <div class="card">
+    <div class="card-label">Active Bans</div>
+    <div class="card-value">{{ total_bans }}</div>
+  </div>
+
+  <div class="card">
+    <div class="card-label">Recent Alerts</div>
+    <div class="card-value">{{ recent_alerts }}</div>
+  </div>
+
+  <div class="card {% if is_banned %}card-error{% else %}card-ok{% endif %}">
+    <div class="card-label">Your IP</div>
+    <div class="card-value">{{ client_ip }}</div>
+    <div class="card-sub">{{ "⚠️ Currently BANNED" if is_banned else "✅ Not banned" }}</div>
+  </div>
+</div>
+
+{% if is_banned %}
+<div class="section">
+  <h2>Unban your IP</h2>
+  <form method="post" action="{{ url_for('unban') }}" onsubmit="return confirm('Unban {{ client_ip }}?')">
+    <input type="hidden" name="ip" value="{{ client_ip }}">
+    <button type="submit" class="btn btn-danger">Unban {{ client_ip }}</button>
+  </form>
+</div>
+{% endif %}
+
+<div class="section">
+  <h2>Manual Unban</h2>
+  <form method="post" action="{{ url_for('unban') }}" onsubmit="return confirm('Unban this IP?')">
+    <input type="text" name="ip" placeholder="e.g. 1.2.3.4" required pattern="[0-9a-fA-F.:\/]+" class="text-input">
+    <button type="submit" class="btn btn-danger">Unban</button>
+  </form>
+</div>
+
+<p class="muted">Page loaded at {{ now if now else '' }}. <a href="{{ url_for('dashboard') }}">Refresh</a></p>
+{% endblock %}
