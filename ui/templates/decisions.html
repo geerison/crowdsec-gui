@@ -5,7 +5,7 @@
 <h1>Active Decisions / Bans</h1>
 
 {% if error %}
-<div class="flash flash-error">{{ error }}</div>
+<div class="flash flash-error">⚠️ {{ error }}</div>
 {% endif %}
 
 <form method="get" class="filter-form">
@@ -15,7 +15,10 @@
   <a href="{{ url_for('decisions') }}" class="btn btn-secondary">Clear</a>
 </form>
 
-<p>{{ decisions|length }} decision(s) shown.</p>
+<p class="result-count">
+  {{ total }} decision(s) found
+  {% if total_pages > 1 %} &mdash; page {{ page }} of {{ total_pages }}{% endif %}
+</p>
 
 {% if decisions %}
 <table>
@@ -50,14 +53,45 @@
     {% endfor %}
   </tbody>
 </table>
+
+{% if total_pages > 1 %}
+<div class="pagination">
+  {% set base = url_for('decisions', ip=filter_ip, scenario=filter_scenario) %}
+  {% if page > 1 %}
+    <a href="{{ base }}&page={{ page - 1 }}" class="btn btn-secondary">&laquo; Prev</a>
+  {% else %}
+    <span class="btn btn-secondary" aria-disabled="true">&laquo; Prev</span>
+  {% endif %}
+
+  {% for p in range(1, total_pages + 1) %}
+    {% if p == page %}
+      <span class="btn current">{{ p }}</span>
+    {% elif p == 1 or p == total_pages or (p >= page - 2 and p <= page + 2) %}
+      <a href="{{ base }}&page={{ p }}" class="btn btn-secondary">{{ p }}</a>
+    {% elif p == page - 3 or p == page + 3 %}
+      <span class="page-info">…</span>
+    {% endif %}
+  {% endfor %}
+
+  {% if page < total_pages %}
+    <a href="{{ base }}&page={{ page + 1 }}" class="btn btn-secondary">Next &raquo;</a>
+  {% else %}
+    <span class="btn btn-secondary" aria-disabled="true">Next &raquo;</span>
+  {% endif %}
+</div>
+{% endif %}
+
 {% else %}
-<p class="muted">No decisions found.</p>
+<div class="empty-state">
+  <div class="empty-icon">🎉</div>
+  <p>No active bans{% if filter_ip or filter_scenario %} matching the current filter{% endif %}.</p>
+</div>
 {% endif %}
 
 <div class="section">
   <h2>Manual Unban</h2>
   <form method="post" action="{{ url_for('unban') }}" onsubmit="return confirm('Unban this IP?')">
-    <input type="text" name="ip" placeholder="e.g. 1.2.3.4" required pattern="[0-9a-fA-F.:\/]+" class="text-input">
+    <input type="text" name="ip" placeholder="e.g. 1.2.3.4" required pattern="[0-9a-fA-F.:\\/]+" class="text-input">
     <button type="submit" class="btn btn-danger">Unban</button>
   </form>
 </div>

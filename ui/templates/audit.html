@@ -5,25 +5,80 @@
 <h1>Audit Log</h1>
 
 {% if error %}
-<div class="flash flash-error">{{ error }}</div>
+<div class="flash flash-error">⚠️ {{ error }}</div>
 {% endif %}
+
+<p class="result-count">
+  {{ total }} entr{{ 'y' if total == 1 else 'ies' }} total
+  {% if total_pages > 1 %} &mdash; page {{ page }} of {{ total_pages }}{% endif %}
+</p>
 
 {% if lines %}
 <table>
   <thead>
     <tr>
-      <th>Log Entry</th>
+      <th>Timestamp</th>
+      <th>Action</th>
+      <th>IP</th>
+      <th>Result</th>
+      <th>From</th>
     </tr>
   </thead>
   <tbody>
     {% for line in lines %}
+    {% set parts = {} %}
+    {% for token in line.split(' ') %}
+      {% if '=' in token %}
+        {% set kv = token.split('=', 1) %}
+        {% if kv|length == 2 %}
+          {%- if parts.update({kv[0]: kv[1]}) %}{% endif %}
+        {% endif %}
+      {% endif %}
+    {% endfor %}
     <tr>
-      <td><code>{{ line }}</code></td>
+      <td class="audit-ts">{{ line.split(' ')[0] if line else '—' }}</td>
+      <td class="audit-action">{{ parts.get('action', '—') }}</td>
+      <td class="audit-ip"><code>{{ parts.get('ip', '—') }}</code></td>
+      <td class="{% if 'success' in parts.get('result','') %}audit-result-success{% elif 'fail' in parts.get('result','') or 'invalid' in parts.get('result','') %}audit-result-failed{% endif %}">
+        {{ parts.get('result', '—') }}
+      </td>
+      <td><code>{{ parts.get('from', '—') }}</code></td>
     </tr>
     {% endfor %}
   </tbody>
 </table>
+
+{% if total_pages > 1 %}
+<div class="pagination">
+  {% set base = url_for('audit') %}
+  {% if page > 1 %}
+    <a href="{{ base }}?page={{ page - 1 }}" class="btn btn-secondary">&laquo; Prev</a>
+  {% else %}
+    <span class="btn btn-secondary" aria-disabled="true">&laquo; Prev</span>
+  {% endif %}
+
+  {% for p in range(1, total_pages + 1) %}
+    {% if p == page %}
+      <span class="btn current">{{ p }}</span>
+    {% elif p == 1 or p == total_pages or (p >= page - 2 and p <= page + 2) %}
+      <a href="{{ base }}?page={{ p }}" class="btn btn-secondary">{{ p }}</a>
+    {% elif p == page - 3 or p == page + 3 %}
+      <span class="page-info">…</span>
+    {% endif %}
+  {% endfor %}
+
+  {% if page < total_pages %}
+    <a href="{{ base }}?page={{ page + 1 }}" class="btn btn-secondary">Next &raquo;</a>
+  {% else %}
+    <span class="btn btn-secondary" aria-disabled="true">Next &raquo;</span>
+  {% endif %}
+</div>
+{% endif %}
+
 {% else %}
-<p class="muted">No audit log entries yet.</p>
+<div class="empty-state">
+  <div class="empty-icon">📋</div>
+  <p>No audit log entries yet. Unban actions will appear here.</p>
+</div>
 {% endif %}
 {% endblock %}
