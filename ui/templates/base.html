@@ -10,10 +10,10 @@
   <nav>
     <a href="{{ url_for('dashboard') }}" class="brand">🛡 CrowdSec GUI</a>
     <div class="nav-links">
-      <a href="{{ url_for('dashboard') }}">Dashboard</a>
-      <a href="{{ url_for('decisions') }}">Decisions</a>
-      <a href="{{ url_for('alerts') }}">Alerts</a>
-      <a href="{{ url_for('audit') }}">Audit</a>
+      <a href="{{ url_for('dashboard') }}" {% if request.endpoint == 'dashboard' %}class="active"{% endif %}>Dashboard</a>
+      <a href="{{ url_for('decisions') }}" {% if request.endpoint == 'decisions' %}class="active"{% endif %}>Decisions</a>
+      <a href="{{ url_for('alerts') }}" {% if request.endpoint == 'alerts' %}class="active"{% endif %}>Alerts</a>
+      <a href="{{ url_for('audit') }}" {% if request.endpoint == 'audit' %}class="active"{% endif %}>Audit</a>
     </div>
   </nav>
 
@@ -28,7 +28,9 @@
   </main>
 
   <footer>
-    <small>CrowdSec GUI v1 &mdash; helper: <code>{{ config.get('HELPER_URL', '') }}</code></small>
+    <small>CrowdSec GUI &mdash; helper: <code>{{ config.get('HELPER_URL', '') }}</code></small>
   </footer>
+
+  {% block scripts %}{% endblock %}
 </body>
 </html>

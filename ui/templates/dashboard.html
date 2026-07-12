@@ -5,31 +5,54 @@
 <h1>Dashboard</h1>
 
 {% if error %}
-<div class="flash flash-error">{{ error }}</div>
+<div class="flash flash-error">⚠️ {{ error }}</div>
 {% endif %}
 
 <div class="card-grid">
   <div class="card {% if crowdsec_ok %}card-ok{% else %}card-error{% endif %}">
     <div class="card-label">CrowdSec Status</div>
-    <div class="card-value">{{ "✅ Reachable" if crowdsec_ok else "❌ Unreachable" }}</div>
+    <div class="card-value">{{ "✅" if crowdsec_ok else "❌" }}</div>
+    <div class="card-sub">{{ "Reachable" if crowdsec_ok else "Unreachable" }}</div>
   </div>
 
   <div class="card">
     <div class="card-label">Active Bans</div>
     <div class="card-value">{{ total_bans }}</div>
+    <div class="card-sub">decisions in effect</div>
   </div>
 
   <div class="card">
     <div class="card-label">Recent Alerts</div>
     <div class="card-value">{{ recent_alerts }}</div>
+    <div class="card-sub">total loaded</div>
   </div>
 
   <div class="card {% if is_banned %}card-error{% else %}card-ok{% endif %}">
     <div class="card-label">Your IP</div>
-    <div class="card-value">{{ client_ip }}</div>
+    <div class="card-value" style="font-size:1.1rem; word-break:break-all;">{{ client_ip }}</div>
     <div class="card-sub">{{ "⚠️ Currently BANNED" if is_banned else "✅ Not banned" }}</div>
   </div>
 </div>
+
+{% if has_chart_data %}
+<div class="chart-grid">
+  <div class="chart-card">
+    <h2>Alerts – last 24h (by hour)</h2>
+    <canvas id="hourChart"></canvas>
+  </div>
+  <div class="chart-card">
+    <h2>Top Scenarios</h2>
+    <canvas id="scenarioChart"></canvas>
+  </div>
+</div>
+{% else %}
+<div class="section">
+  <div class="empty-state">
+    <div class="empty-icon">📊</div>
+    <p>No alert data available for charts.</p>
+  </div>
+</div>
+{% endif %}
 
 {% if is_banned %}
 <div class="section">
@@ -44,10 +67,72 @@
 <div class="section">
   <h2>Manual Unban</h2>
   <form method="post" action="{{ url_for('unban') }}" onsubmit="return confirm('Unban this IP?')">
-    <input type="text" name="ip" placeholder="e.g. 1.2.3.4" required pattern="[0-9a-fA-F.:\/]+" class="text-input">
+    <input type="text" name="ip" placeholder="e.g. 1.2.3.4" required pattern="[0-9a-fA-F.:\\/]+" class="text-input">
     <button type="submit" class="btn btn-danger">Unban</button>
   </form>
 </div>
 
-<p class="muted">Page loaded at {{ now if now else '' }}. <a href="{{ url_for('dashboard') }}">Refresh</a></p>
+<p class="muted">Page loaded at {{ now }}. <a href="{{ url_for('dashboard') }}">Refresh</a></p>
+{% endblock %}
+
+{% block scripts %}
+{% if has_chart_data %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+(function() {
+  var chartDefaults = {
+    responsive: true,
+    maintainAspectRatio: true,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { ticks: { color: '#64748b', font: { size: 11 } }, grid: { color: '#1e293b' } },
+      y: { ticks: { color: '#64748b', font: { size: 11 }, stepSize: 1 }, grid: { color: '#1e293b' }, beginAtZero: true }
+    }
+  };
+
+  new Chart(document.getElementById('hourChart'), {
+    type: 'bar',
+    data: {
+      labels: {{ hour_labels | safe }},
+      datasets: [{
+        data: {{ hour_data | safe }},
+        backgroundColor: 'rgba(59, 130, 246, 0.5)',
+        borderColor: '#3b82f6',
+        borderWidth: 1,
+        borderRadius: 3
+      }]
+    },
+    options: chartDefaults
+  });
+
+  var scenarioLabels = {{ scenario_labels | safe }};
+  var scenarioData   = {{ scenario_data | safe }};
+  if (scenarioLabels.length > 0) {
+    new Chart(document.getElementById('scenarioChart'), {
+      type: 'bar',
+      data: {
+        labels: scenarioLabels,
+        datasets: [{
+          data: scenarioData,
+          backgroundColor: 'rgba(251, 146, 60, 0.5)',
+          borderColor: '#fb923c',
+          borderWidth: 1,
+          borderRadius: 3
+        }]
+      },
+      options: Object.assign({}, chartDefaults, {
+        indexAxis: 'y',
+        scales: {
+          x: { ticks: { color: '#64748b', font: { size: 11 } }, grid: { color: '#1e293b' }, beginAtZero: true },
+          y: { ticks: { color: '#94a3b8', font: { size: 11 } }, grid: { color: '#1e293b' } }
+        }
+      })
+    });
+  } else {
+    document.getElementById('scenarioChart').closest('.chart-card').innerHTML =
+      '<div class="empty-state"><div class="empty-icon">📭</div><p>No scenario data yet.</p></div>';
+  }
+})();
+</script>
+{% endif %}
 {% endblock %}
