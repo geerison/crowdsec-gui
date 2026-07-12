@@ -63,6 +63,11 @@ def run_unban_script(ip):
     return result.stdout, result.stderr, result.returncode
 
 
+@app.route("/health")
+def health():
+    return jsonify({"ok": True}), 200
+
+
 @app.route("/decisions")
 def decisions():
     check_secret()

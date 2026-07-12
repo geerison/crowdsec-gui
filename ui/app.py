@@ -70,6 +70,11 @@ def _paginate(data, page, per_page):
     return data[offset:offset + per_page], page, total_pages, total
 
 
+@app.route("/health")
+def health():
+    return {"ok": True}, 200
+
+
 @app.route("/")
 def dashboard():
     decisions, err_d = helper_get("/decisions")

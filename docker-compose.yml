@@ -7,3 +7,9 @@ services:
     environment:
       - HELPER_URL=http://127.0.0.1:9099
       - HELPER_SECRET=${HELPER_SECRET}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8088/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
