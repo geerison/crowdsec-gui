@@ -76,8 +76,9 @@ cd /docker/crowdsec-gui
 
 ```bash
 cp .env.example .env
-# Edit .env and set a strong random HELPER_SECRET:
+# Edit .env and set strong random secrets:
 python3 -c "import secrets; print('HELPER_SECRET=' + secrets.token_hex(32))" >> .env
+python3 -c "import secrets; print('FLASK_SECRET=' + secrets.token_hex(32))" >> .env
 ```
 
 ### 3. Set up the host helper
@@ -187,6 +188,7 @@ sudo systemctl reload caddy
 | Variable | Where | Description |
 |---|---|---|
 | `HELPER_SECRET` | `.env` | Shared secret between UI container and helper. Must match on both sides. |
+| `FLASK_SECRET` | `.env` | Flask session signing key for the UI. Keep stable across restarts. |
 | `HELPER_URL` | `docker-compose.yml` | URL to reach the helper. Default: `http://host.docker.internal:9099` |
 | `AUDIT_LOG` | helper `systemd` env or `.env` | Path to the audit log file. Default: `/opt/crowdsec-gui/helper/crowdsec-audit.log` |
 

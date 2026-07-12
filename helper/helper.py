@@ -26,8 +26,8 @@ VALID_IP_RE = re.compile(
 def check_secret():
     """Abort if the shared secret header is missing or wrong."""
     if not HELPER_SECRET:
-        app.logger.warning("HELPER_SECRET is not set — requests are unauthenticated!")
-        return
+        app.logger.error("HELPER_SECRET is not set — refusing authenticated endpoints.")
+        abort(503)
     incoming = request.headers.get("X-Helper-Secret", "")
     if incoming != HELPER_SECRET:
         abort(403)

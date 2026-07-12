@@ -24,6 +24,15 @@ Use:
 sudo /usr/local/bin/update-crowdsec-gui
 ```
 
+After update, reload helper service units and restart helper/UI so Gunicorn changes apply:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl restart crowdsec-gui-helper
+cd /docker/crowdsec-gui
+docker compose up -d --build crowdsec-ui
+```
+
 ## Reboot persistence
 Check:
 
@@ -44,6 +53,27 @@ Expected:
 - UI uses `network_mode: host`
 - Helper is reached at `http://127.0.0.1:9099`
 - Caddy proxies to `127.0.0.1:8088`
+- UI and helper now run behind Gunicorn (Caddy and host-network model stay unchanged)
+
+## Backup / restore quick note (self-hosted)
+Before major updates, keep a small timestamped backup of code + env + helper data:
+
+```bash
+ts="$(date +%Y%m%d-%H%M%S)"
+sudo tar -czf "/root/crowdsec-gui-backup-${ts}.tar.gz" \
+  /docker/crowdsec-gui/.env \
+  /docker/crowdsec-gui \
+  /opt/crowdsec-gui/helper
+```
+
+Restore essentials from backup archive:
+
+```bash
+sudo tar -xzf /root/crowdsec-gui-backup-<timestamp>.tar.gz -C /
+sudo systemctl daemon-reload
+sudo systemctl restart crowdsec-gui-helper
+cd /docker/crowdsec-gui && docker compose up -d --build crowdsec-ui
+```
 
 ## Rollback / recovery quick guide
 Verify service status:
