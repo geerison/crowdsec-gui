@@ -1,14 +1,9 @@
-version: "3.9"
-
 services:
   crowdsec-ui:
     build: ./ui
     container_name: crowdsec-ui
     restart: unless-stopped
-    ports:
-      - "127.0.0.1:8088:8088"
+    network_mode: host
     environment:
-      - HELPER_URL=http://host.docker.internal:9099
+      - HELPER_URL=http://127.0.0.1:9099
       - HELPER_SECRET=${HELPER_SECRET}
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
