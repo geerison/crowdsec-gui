@@ -219,6 +219,7 @@ sudo systemctl reload caddy
 | Dashboard | `/` | Status overview, active ban count, recent alerts, your IP ban status |
 | Decisions | `/decisions` | Full list of active bans; filter by IP or scenario; 4-hour, 100-year, and unban controls |
 | Alerts | `/alerts` | Recent CrowdSec alerts; filter by source IP or scenario |
+| Offending IPs | `/offending-ips` | Top 10 alerting source IPs, with current-ban state and links to filtered alerts and decisions |
 | Audit | `/audit` | Log of all ban and unban actions performed through the GUI |
 
 ---

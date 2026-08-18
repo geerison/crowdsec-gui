@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title_suffix %} – Offending IPs{% endblock %}
+
+{% block content %}
+<h1>Top Offending IPs</h1>
+
+{% if error %}
+<div class="flash flash-error">⚠️ {{ error }}</div>
+{% endif %}
+
+<p class="result-count">
+  Top 10 source IPs by alert count from {{ analyzed_alerts }} loaded alert(s). Ties are ordered by latest activity.
+</p>
+
+{% if offenders %}
+<table>
+  <thead>
+    <tr>
+      <th>Rank</th>
+      <th>Source IP</th>
+      <th>Alerts</th>
+      <th>Latest Activity</th>
+      <th>Top Scenario</th>
+      <th>Country</th>
+      <th>Decision</th>
+      <th>Explore</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for offender in offenders %}
+    <tr>
+      <td>{{ loop.index }}</td>
+      <td><code>{{ offender.ip }}</code></td>
+      <td>{{ offender.alert_count }}</td>
+      <td>{{ offender.latest_at or '—' }}</td>
+      <td>{{ offender.top_scenario }}</td>
+      <td>{{ offender.country or '—' }}</td>
+      <td>
+        {% if offender.active_ban %}
+        <span class="status-pill status-pill-active">Active ban</span>
+        {% else %}
+        <span class="status-pill">No active ban</span>
+        {% endif %}
+      </td>
+      <td class="table-actions">
+        <a class="btn btn-secondary btn-sm" href="{{ url_for('alerts', ip=offender.ip) }}">Alerts</a>
+        <a class="btn btn-secondary btn-sm" href="{{ url_for('decisions', ip=offender.ip) }}">Decisions</a>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<div class="empty-state">
+  <div class="empty-icon">📈</div>
+  <p>No source IPs were found in the loaded alerts.</p>
+</div>
+{% endif %}
+{% endblock %}

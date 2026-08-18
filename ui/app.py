@@ -114,6 +114,18 @@ def _paginate(data, page, per_page):
     return data[offset:offset + per_page], page, total_pages, total
 
 
+def _parse_alert_timestamp(value):
+    if not isinstance(value, str) or not value:
+        return datetime.datetime.min.replace(tzinfo=datetime.timezone.utc)
+
+    try:
+        return datetime.datetime.fromisoformat(value.replace("Z", "+00:00")).astimezone(
+            datetime.timezone.utc
+        )
+    except ValueError:
+        return datetime.datetime.min.replace(tzinfo=datetime.timezone.utc)
+
+
 @app.route("/health")
 def health():
     return {"ok": True}, 200
@@ -225,6 +237,68 @@ def decisions():
         per_page=per_page,
         client_ip=get_client_ip(),
         ban_durations=BAN_DURATIONS,
+    )
+
+
+@app.route("/offending-ips")
+def offending_ips():
+    alerts, alerts_error = helper_get("/alerts")
+    decisions, decisions_error = helper_get("/decisions")
+    alerts = alerts or []
+    decisions = decisions or []
+    active_ban_values = {
+        decision.get("value")
+        for decision in decisions
+        if isinstance(decision, dict) and isinstance(decision.get("value"), str)
+    }
+    offenders = {}
+
+    for alert in alerts:
+        if not isinstance(alert, dict):
+            continue
+
+        source = alert.get("source")
+        source_ip = source.get("ip") if isinstance(source, dict) else None
+        ip = normalize_ip(source_ip)
+        if not ip:
+            continue
+
+        created_at = alert.get("created_at", "")
+        entry = offenders.setdefault(
+            ip,
+            {
+                "ip": ip,
+                "alert_count": 0,
+                "scenarios": Counter(),
+                "latest_at": "",
+                "latest_sort": datetime.datetime.min.replace(tzinfo=datetime.timezone.utc),
+                "country": source.get("cn", "") if isinstance(source, dict) else "",
+            },
+        )
+        entry["alert_count"] += 1
+        scenario = alert.get("scenario")
+        if isinstance(scenario, str) and scenario:
+            entry["scenarios"][scenario] += 1
+
+        created_sort = _parse_alert_timestamp(created_at)
+        if created_sort > entry["latest_sort"]:
+            entry["latest_at"] = created_at
+            entry["latest_sort"] = created_sort
+            if isinstance(source, dict):
+                entry["country"] = source.get("cn", "") or entry["country"]
+
+    ranked = list(offenders.values())
+    ranked.sort(key=lambda entry: entry["latest_sort"], reverse=True)
+    ranked.sort(key=lambda entry: entry["alert_count"], reverse=True)
+    for entry in ranked:
+        entry["top_scenario"] = entry["scenarios"].most_common(1)[0][0] if entry["scenarios"] else "—"
+        entry["active_ban"] = entry["ip"] in active_ban_values
+
+    return render_template(
+        "offending_ips.html",
+        offenders=ranked[:10],
+        analyzed_alerts=len(alerts),
+        error=alerts_error or decisions_error,
     )
 
 
