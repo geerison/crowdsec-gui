@@ -129,6 +129,7 @@ code { font-family: monospace; font-size: 0.85em; color: #7dd3fc; }
   min-width: 200px;
 }
 .text-input:focus { outline: none; border-color: #3b82f6; }
+.duration-select { min-width: 130px; }
 
 /* Buttons */
 .btn {

@@ -1,22 +1,65 @@
 import os
-import re
+import hmac
+import ipaddress
 import json
 import math
 import datetime
+import secrets
 import requests
 from collections import Counter
-from flask import Flask, render_template, request, redirect, url_for, flash, abort
+from flask import Flask, render_template, request, redirect, url_for, flash, abort, session
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET", os.urandom(24))
 
 HELPER_URL = os.environ.get("HELPER_URL", "http://host.docker.internal:9099")
 HELPER_SECRET = os.environ.get("HELPER_SECRET", "")
-
-VALID_IP_RE = re.compile(
-    r"^(\d{1,3}\.){3}\d{1,3}(/\d{1,2})?$"
-    r"|^([0-9a-fA-F]{0,4}:){2,7}[0-9a-fA-F]{0,4}(/\d{1,3})?$"
+TRUSTED_PROXY_IPS = frozenset(
+    value.strip()
+    for value in os.environ.get("TRUSTED_PROXY_IPS", "127.0.0.1,::1").split(",")
+    if value.strip()
 )
+BAN_DURATIONS = {
+    "15m": "15 minutes",
+    "4h": "4 hours",
+    "24h": "24 hours",
+    "168h": "7 days",
+}
+
+
+def normalize_ip(value):
+    if not isinstance(value, str):
+        return None
+    try:
+        value = value.strip()
+        if "/" in value:
+            return str(ipaddress.ip_network(value, strict=False))
+        return str(ipaddress.ip_address(value))
+    except ValueError:
+        return None
+
+
+def csrf_token():
+    token = session.get("_csrf_token")
+    if not token:
+        token = secrets.token_urlsafe(32)
+        session["_csrf_token"] = token
+    return token
+
+
+@app.context_processor
+def inject_csrf_token():
+    return {"csrf_token": csrf_token()}
+
+
+@app.before_request
+def verify_csrf_token():
+    if request.method != "POST":
+        return
+    expected = session.get("_csrf_token", "")
+    submitted = request.form.get("csrf_token", "")
+    if not expected or not submitted or not hmac.compare_digest(expected, submitted):
+        abort(400)
 
 
 def helper_headers():
@@ -56,9 +99,9 @@ def helper_post(path, payload):
 
 def get_client_ip():
     forwarded = request.headers.get("X-Forwarded-For")
-    if forwarded:
+    if request.remote_addr in TRUSTED_PROXY_IPS and forwarded:
         return forwarded.split(",")[0].strip()
-    return request.remote_addr
+    return request.remote_addr or "unknown"
 
 
 def _paginate(data, page, per_page):
@@ -135,6 +178,7 @@ def dashboard():
         scenario_labels=json.dumps([s for s, _ in top_scenarios]),
         scenario_data=json.dumps([c for _, c in top_scenarios]),
         has_chart_data=bool(alerts),
+        ban_durations=BAN_DURATIONS,
     )
 
 
@@ -166,14 +210,16 @@ def decisions():
         total_pages=total_pages,
         total=total,
         per_page=per_page,
+        client_ip=get_client_ip(),
+        ban_durations=BAN_DURATIONS,
     )
 
 
 @app.route("/unban", methods=["POST"])
 def unban():
-    ip = request.form.get("ip", "").strip()
-    if not ip or not VALID_IP_RE.match(ip):
-        flash(f"Invalid IP address: {ip}", "error")
+    ip = normalize_ip(request.form.get("ip"))
+    if not ip:
+        flash("Invalid IP address.", "error")
         return redirect(url_for("decisions"))
 
     result, err = helper_post("/unban", {"ip": ip})
@@ -187,25 +233,33 @@ def unban():
 
 @app.route("/ban", methods=["POST"])
 def ban():
-    ip = request.form.get("ip", "").strip()
-    if not ip or not VALID_IP_RE.match(ip):
-        flash(f"Invalid IP address: {ip}", "error")
+    ip = normalize_ip(request.form.get("ip"))
+    duration = request.form.get("duration", "4h")
+    if not ip:
+        flash("Invalid IP address.", "error")
+        return redirect(url_for("decisions"))
+    if duration not in BAN_DURATIONS:
+        flash("Invalid ban duration.", "error")
         return redirect(url_for("decisions"))
 
-    result, err = helper_post("/ban", {"ip": ip})
+    result, err = helper_post("/ban", {"ip": ip, "duration": duration})
     if err:
         flash(f"Ban failed: {err}", "error")
     else:
-        flash(f"Banned {ip} for 4 hours.", "success")
+        flash(f"Banned {ip} for {BAN_DURATIONS[duration]}.", "success")
 
     return redirect(url_for("decisions"))
 
 
 @app.route("/ban/permanent", methods=["POST"])
 def permanent_ban():
-    ip = request.form.get("ip", "").strip()
-    if not ip or not VALID_IP_RE.match(ip):
-        flash(f"Invalid IP address: {ip}", "error")
+    ip = normalize_ip(request.form.get("ip"))
+    confirmation_ip = normalize_ip(request.form.get("confirmation_ip"))
+    if not ip:
+        flash("Invalid IP address.", "error")
+        return redirect(url_for("decisions"))
+    if confirmation_ip != ip:
+        flash("Permanent-ban confirmation did not match the IP address.", "error")
         return redirect(url_for("decisions"))
 
     result, err = helper_post("/ban/permanent", {"ip": ip})

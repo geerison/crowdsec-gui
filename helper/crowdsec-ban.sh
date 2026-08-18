@@ -1,25 +1,29 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Read IP from stdin (passed by the helper service, never from command-line args).
+# Read IP and the duration preset from stdin (never from command-line args).
 read -r IP
+read -r DURATION
 
-# Validate: only allow IPv4, IPv6, and CIDR notation.
-if [[ ! "$IP" =~ ^[0-9a-fA-F.:/]+$ ]]; then
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/crowdsec-ip-validation.sh"
+
+if ! IP="$(normalize_ip "$IP")"; then
   echo "ERROR: invalid IP address" >&2
   exit 1
 fi
 
-# Additional strict check: must match IPv4 or IPv6 pattern.
-if [[ ! "$IP" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}(/[0-9]{1,2})?$ ]] && \
-    [[ ! "$IP" =~ ^([0-9a-fA-F]{0,4}:){2,7}[0-9a-fA-F]{0,4}(/[0-9]{1,3})?$ ]]; then
-  echo "ERROR: invalid IP address" >&2
-  exit 1
-fi
+case "$DURATION" in
+  15m|4h|24h|168h) ;;
+  *)
+    echo "ERROR: invalid ban duration" >&2
+    exit 1
+    ;;
+esac
 
-# Keep the action bounded and attributable: the UI cannot provide CLI arguments.
+# The duration comes from a fixed allowlist; the UI cannot provide CLI arguments.
 exec /usr/bin/docker exec crowdsec cscli decisions add \
   --ip "$IP" \
-  --duration 4h \
+  --duration "$DURATION" \
   --type ban \
   --reason manual_gui

@@ -193,6 +193,7 @@ sudo systemctl reload caddy
 | `FLASK_SECRET` | `.env` | Flask session signing key for the UI. Keep stable across restarts. |
 | `HELPER_URL` | `docker-compose.yml` | URL to reach the helper. Default: `http://host.docker.internal:9099` |
 | `AUDIT_LOG` | helper `systemd` env or `.env` | Path to the audit log file. Default: `/opt/crowdsec-gui/helper/crowdsec-audit.log` |
+| `TRUSTED_PROXY_IPS` | `.env` | Comma-separated proxy source addresses trusted to set `X-Forwarded-For`. Default: loopback only. |
 
 ---
 
@@ -201,7 +202,9 @@ sudo systemctl reload caddy
 - The helper binds **only to `127.0.0.1:9099`** — not reachable from outside.
 - The UI container reaches the helper via `host.docker.internal` (Linux: `host-gateway`).
 - All ban and unban requests are **POST-only** with IP validation on both the UI and helper.
-- Manual bans use fixed **4-hour** or **100-year** durations and fixed reasons; the UI cannot pass arbitrary CLI arguments. CrowdSec decisions must expire, so the 100-year option is the reversible equivalent of a permanent ban.
+- Every state-changing UI request includes a per-session CSRF token.
+- The UI accepts `X-Forwarded-For` only from configured trusted proxy source addresses.
+- Manual bans use fixed **15-minute, 4-hour, 24-hour, 7-day, or 100-year** durations and fixed reasons; the UI cannot pass arbitrary CLI arguments. CrowdSec decisions must expire, so the 100-year option is the reversible equivalent of a permanent ban.
 - Ban and unban actions are **audit-logged** with timestamp, IP, and source address.
 - The helper `sudo` rules allow **only five specific scripts** — no arbitrary commands.
 - Caddy handles TLS and basic auth before traffic ever reaches the UI container.
