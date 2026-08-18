@@ -1,6 +1,6 @@
 # CrowdSec GUI v1
 
-A self-hosted admin GUI for [CrowdSec](https://crowdsec.net/) — view decisions, bans, and alerts; manually ban or unban IPs; and audit all actions.
+A self-hosted admin GUI for [CrowdSec](https://crowdsec.net/) — view alerts and decisions, manage safe manual bans, rank offending IPs, and audit GUI actions.
 
 ## Architecture
 
@@ -44,7 +44,8 @@ The GUI container has **no Docker access at all**.
 │   │   ├── dashboard.html
 │   │   ├── decisions.html
 │   │   ├── alerts.html
-│   │   └── audit.html
+│   │   ├── audit.html
+│   │   └── offending_ips.html
 │   └── static/
 │       └── style.css
 ├── helper/
@@ -52,9 +53,10 @@ The GUI container has **no Docker access at all**.
 │   ├── requirements.txt
 │   ├── crowdsec-list-decisions.sh   ← calls docker exec crowdsec cscli decisions list
 │   ├── crowdsec-list-alerts.sh      ← calls docker exec crowdsec cscli alerts list
-│   ├── crowdsec-ban.sh              ← adds a fixed 4-hour manual IP ban
+│   ├── crowdsec-ban.sh              ← adds a preset-duration manual IP ban
 │   ├── crowdsec-permanent-ban.sh    ← adds a reversible 100-year IP ban
 │   ├── crowdsec-unban.sh            ← calls docker exec crowdsec cscli decisions delete
+│   ├── crowdsec-ip-validation.sh    ← canonicalizes IP/CIDR input
 │   ├── crowdsec-gui-helper.service  ← systemd unit
 │   └── sudoers.crowdsec-gui         ← sudoers snippet
 └── caddy/
@@ -78,9 +80,12 @@ cd /docker/crowdsec-gui
 
 ```bash
 cp .env.example .env
-# Edit .env and set strong random secrets:
-python3 -c "import secrets; print('HELPER_SECRET=' + secrets.token_hex(32))" >> .env
-python3 -c "import secrets; print('FLASK_SECRET=' + secrets.token_hex(32))" >> .env
+HELPER_SECRET_VALUE="$(python3 -c 'import secrets; print(secrets.token_hex(32))')"
+FLASK_SECRET_VALUE="$(python3 -c 'import secrets; print(secrets.token_hex(32))')"
+sed -i "s/^HELPER_SECRET=.*/HELPER_SECRET=$HELPER_SECRET_VALUE/" .env
+sed -i "s/^FLASK_SECRET=.*/FLASK_SECRET=$FLASK_SECRET_VALUE/" .env
+unset HELPER_SECRET_VALUE FLASK_SECRET_VALUE
+chmod 600 .env
 ```
 
 ### 3. Set up the host helper
@@ -91,26 +96,40 @@ python3 -c "import secrets; print('FLASK_SECRET=' + secrets.token_hex(32))" >> .
 sudo useradd --system --no-create-home --shell /usr/sbin/nologin crowdsec-gui
 ```
 
-#### b. Copy helper files to `/opt/crowdsec-gui`
+#### b. Install helper files to `/opt/crowdsec-gui`
 
 ```bash
-sudo mkdir -p /opt/crowdsec-gui
-sudo cp -r /docker/crowdsec-gui/helper /opt/crowdsec-gui/helper
-sudo chown -R crowdsec-gui:crowdsec-gui /opt/crowdsec-gui
+sudo install -d -o crowdsec-gui -g crowdsec-gui /opt/crowdsec-gui/helper
+sudo install -o crowdsec-gui -g crowdsec-gui -m 644 \
+  /docker/crowdsec-gui/helper/helper.py \
+  /opt/crowdsec-gui/helper/helper.py
+sudo install -o root -g root -m 644 \
+  /docker/crowdsec-gui/helper/requirements.txt \
+  /opt/crowdsec-gui/helper/requirements.txt
 ```
 
-#### c. Make scripts executable (and owned by root for sudoers safety)
+#### c. Install root-owned helper scripts
 
 ```bash
-sudo chown root:root /opt/crowdsec-gui/helper/*.sh
-sudo chmod 755 /opt/crowdsec-gui/helper/*.sh
+for script in \
+  crowdsec-list-decisions.sh \
+  crowdsec-list-alerts.sh \
+  crowdsec-ip-validation.sh \
+  crowdsec-unban.sh \
+  crowdsec-ban.sh \
+  crowdsec-permanent-ban.sh
+do
+  sudo install -o root -g root -m 755 \
+    "/docker/crowdsec-gui/helper/$script" \
+    "/opt/crowdsec-gui/helper/$script"
+done
 ```
 
 #### d. Copy the `.env` to `/opt/crowdsec-gui/.env`
 
 ```bash
 sudo cp /docker/crowdsec-gui/.env /opt/crowdsec-gui/.env
-sudo chown crowdsec-gui:crowdsec-gui /opt/crowdsec-gui/.env
+sudo chown root:crowdsec-gui /opt/crowdsec-gui/.env
 sudo chmod 640 /opt/crowdsec-gui/.env
 ```
 
@@ -126,7 +145,7 @@ sudo -u crowdsec-gui /opt/crowdsec-gui/venv/bin/pip install -r /opt/crowdsec-gui
 ```bash
 sudo cp /opt/crowdsec-gui/helper/sudoers.crowdsec-gui /etc/sudoers.d/crowdsec-gui
 sudo chmod 440 /etc/sudoers.d/crowdsec-gui
-sudo visudo -c  # verify no syntax errors
+sudo visudo -cf /etc/sudoers.d/crowdsec-gui
 ```
 
 #### g. Install and start the systemd service
@@ -135,19 +154,22 @@ sudo visudo -c  # verify no syntax errors
 sudo cp /opt/crowdsec-gui/helper/crowdsec-gui-helper.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now crowdsec-gui-helper
-sudo systemctl status crowdsec-gui-helper
+sleep 2
+curl -fsS http://127.0.0.1:9099/health
 ```
 
 ### 4. Start the UI container
 
 ```bash
 cd /docker/crowdsec-gui
-docker compose up -d
+docker compose config --quiet
+docker compose up -d --build crowdsec-ui
 ```
 
 Verify:
 ```bash
 docker compose logs crowdsec-ui
+curl -fsS http://127.0.0.1:8088/health
 ```
 
 The UI will be available at `http://127.0.0.1:8088` on the host (only — not public yet).
@@ -190,8 +212,8 @@ sudo systemctl reload caddy
 | Variable | Where | Description |
 |---|---|---|
 | `HELPER_SECRET` | `.env` | Shared secret between UI container and helper. Must match on both sides. |
-| `FLASK_SECRET` | `.env` | Required Flask session signing key for the UI. Keep stable across restarts; Compose refuses to start the UI without it. |
-| `HELPER_URL` | `docker-compose.yml` | URL to reach the helper. Default: `http://host.docker.internal:9099` |
+| `FLASK_SECRET` | `.env` | Required Flask session signing key for CSRF-protected forms. Keep stable across restarts; Compose refuses to start the UI without it. |
+| `HELPER_URL` | `docker-compose.yml` | URL to reach the helper. Default: `http://127.0.0.1:9099` through host networking. |
 | `AUDIT_LOG` | helper `systemd` env or `.env` | Path to the audit log file. Default: `/opt/crowdsec-gui/helper/crowdsec-audit.log` |
 | `TRUSTED_PROXY_IPS` | `.env` | Comma-separated proxy source addresses trusted to set `X-Forwarded-For`. Default: loopback only. |
 
@@ -200,12 +222,13 @@ sudo systemctl reload caddy
 ## Security Notes
 
 - The helper binds **only to `127.0.0.1:9099`** — not reachable from outside.
-- The UI container reaches the helper via `host.docker.internal` (Linux: `host-gateway`).
-- All ban and unban requests are **POST-only** with IP validation on both the UI and helper.
+- The UI container reaches the helper through host networking at `127.0.0.1:9099`.
+- All ban and unban requests are **POST-only**, CSRF-protected, and validate/canonicalize IP or CIDR input in both the UI and helper.
 - Every state-changing UI request includes a per-session CSRF token.
 - The UI accepts `X-Forwarded-For` only from configured trusted proxy source addresses.
 - Manual bans use fixed **15-minute, 4-hour, 24-hour, 7-day, or 100-year** durations and fixed reasons; the UI cannot pass arbitrary CLI arguments. CrowdSec decisions must expire, so the 100-year option is the reversible equivalent of a permanent ban.
 - Ban and unban actions are **audit-logged** with timestamp, IP, and source address.
+- The helper secret uses timing-safe comparison. Command failures are recorded in the system journal and returned to the GUI with a bounded error message.
 - The helper `sudo` rules allow **only five specific scripts** — no arbitrary commands.
 - Caddy handles TLS and basic auth before traffic ever reaches the UI container.
 - **Do not** add `NOPASSWD: ALL` to the sudoers file or mount the Docker socket.
@@ -216,32 +239,60 @@ sudo systemctl reload caddy
 
 | Page | URL | Description |
 |---|---|---|
-| Dashboard | `/` | Status overview, active ban count, recent alerts, your IP ban status |
-| Decisions | `/decisions` | Full list of active bans; filter by IP or scenario; 4-hour, 100-year, and unban controls |
+| Dashboard | `/` | Status overview, active-ban count, recent alerts, your IP status, charts, and manual actions |
+| Decisions | `/decisions` | Separate permanent and temporary/automatic decisions; filter, unban, promote a decision to a confirmed 100-year ban, or create a preset-duration ban |
 | Alerts | `/alerts` | Recent CrowdSec alerts; filter by source IP or scenario |
-| Offending IPs | `/offending-ips` | Top 10 alerting source IPs, with current-ban state and links to filtered alerts and decisions |
+| Offending IPs | `/offending-ips` | Top 10 source IPs by loaded alert count, with latest activity, top scenario, current-ban state, and filtered-page links |
 | Audit | `/audit` | Log of all ban and unban actions performed through the GUI |
 
 ---
 
 ## Troubleshooting
 
-**Helper not reachable from UI container:**
+**UI cannot start or forms return `Bad Request`:**
 ```bash
-# On host, verify helper is listening:
-ss -tlnp | grep 9099
-# From host, test helper:
-curl -H "X-Helper-Secret: your_secret" http://127.0.0.1:9099/decisions
+cd /docker/crowdsec-gui
+grep '^FLASK_SECRET=' .env
+docker compose config --quiet
+docker compose up -d --build crowdsec-ui
+```
+`FLASK_SECRET` must be non-empty and must not change during normal updates. Reload the page after rebuilding the UI to receive a new CSRF token.
+
+**Helper not reachable from the UI:**
+```bash
+sudo systemctl status crowdsec-gui-helper --no-pager
+sudo journalctl -u crowdsec-gui-helper -n 100 --no-pager
+curl -fsS http://127.0.0.1:9099/health
 ```
 
-**`docker exec` permission denied in helper:**
+**Helper starts but cannot manage decisions:**
 ```bash
-# Verify sudoers is correct and the crowdsec-gui user can run the scripts:
+sudo visudo -cf /etc/sudoers.d/crowdsec-gui
 sudo -u crowdsec-gui sudo /opt/crowdsec-gui/helper/crowdsec-list-decisions.sh
+sudo journalctl -u crowdsec-gui-helper -n 100 --no-pager
+```
+
+**Audit log permission denied:**
+```bash
+sudo touch /opt/crowdsec-gui/helper/crowdsec-audit.log
+sudo chown crowdsec-gui:crowdsec-gui /opt/crowdsec-gui/helper/crowdsec-audit.log
+sudo chmod 640 /opt/crowdsec-gui/helper/crowdsec-audit.log
+sudo systemctl restart crowdsec-gui-helper
+```
+
+**Helper virtual environment is missing Gunicorn or pip:**
+```bash
+sudo systemctl stop crowdsec-gui-helper
+sudo apt-get install -y python3-venv
+sudo rm -rf /opt/crowdsec-gui/venv
+sudo -u crowdsec-gui python3 -m venv /opt/crowdsec-gui/venv
+sudo -u crowdsec-gui /opt/crowdsec-gui/venv/bin/python -m pip install \
+  -r /docker/crowdsec-gui/helper/requirements.txt
+sudo systemctl start crowdsec-gui-helper
 ```
 
 **CrowdSec container name mismatch:**
-If your CrowdSec container is not named `crowdsec`, edit the three shell scripts in `helper/` and change `crowdsec` to your container name.
+If your CrowdSec container is not named `crowdsec`, update every helper command script that calls `docker exec` before installing it.
 
 ---
 
