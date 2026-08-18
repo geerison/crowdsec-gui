@@ -19,6 +19,7 @@ HELPER_SECRET = os.environ.get("HELPER_SECRET", "")
 AUDIT_LOG = os.environ.get("AUDIT_LOG", "/opt/crowdsec-gui/helper/crowdsec-audit.log")
 SCRIPTS_DIR = os.path.dirname(os.path.abspath(__file__))
 AUDIT_LINE_LIMIT = 200
+COMMAND_ERROR_LIMIT = 500
 BAN_DURATIONS = frozenset({"15m", "4h", "24h", "168h"})
 PERMANENT_BAN_DURATION = "876000h"
 
@@ -88,6 +89,13 @@ def run_ip_script(script_name, ip):
 
 def run_ban_script(ip, duration):
     return run_ip_script("crowdsec-ban.sh", f"{ip}\n{duration}")
+
+
+def command_error(stdout, stderr):
+    error = (stderr or stdout).strip()
+    if not error:
+        return "CrowdSec command failed without an error message"
+    return error[:COMMAND_ERROR_LIMIT]
 
 
 def json_body():
@@ -172,8 +180,10 @@ def unban():
 
     stdout, stderr, rc = run_ip_script("crowdsec-unban.sh", ip)
     if rc != 0:
-        write_audit("unban", ip, f"failed: {stderr.strip()}", request.remote_addr)
-        return jsonify({"error": stderr.strip()}), 500
+        error = command_error(stdout, stderr)
+        write_audit("unban", ip, "failed", request.remote_addr)
+        app.logger.error("unban failed for %s: %s", ip, error)
+        return jsonify({"error": error}), 500
 
     write_audit("unban", ip, "success", request.remote_addr)
     return jsonify({"ok": True, "ip": ip})
@@ -209,9 +219,10 @@ def create_ban(audit_action, fixed_duration):
     else:
         stdout, stderr, rc = run_ban_script(ip, duration)
     if rc != 0:
+        error = command_error(stdout, stderr)
         write_audit(audit_action, ip, "failed", request.remote_addr)
-        app.logger.error("%s failed for %s: %s", audit_action, ip, stderr.strip())
-        return jsonify({"error": stderr.strip()}), 500
+        app.logger.error("%s failed for %s: %s", audit_action, ip, error)
+        return jsonify({"error": error}), 500
 
     write_audit(audit_action, ip, "success", request.remote_addr)
     return jsonify({"ok": True, "ip": ip, "duration": duration})
