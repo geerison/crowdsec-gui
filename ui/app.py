@@ -185,6 +185,22 @@ def unban():
     return redirect(url_for("decisions"))
 
 
+@app.route("/ban", methods=["POST"])
+def ban():
+    ip = request.form.get("ip", "").strip()
+    if not ip or not VALID_IP_RE.match(ip):
+        flash(f"Invalid IP address: {ip}", "error")
+        return redirect(url_for("decisions"))
+
+    result, err = helper_post("/ban", {"ip": ip})
+    if err:
+        flash(f"Ban failed: {err}", "error")
+    else:
+        flash(f"Banned {ip} for 4 hours.", "success")
+
+    return redirect(url_for("decisions"))
+
+
 @app.route("/alerts")
 def alerts():
     filter_ip = request.args.get("ip", "").strip()

@@ -50,9 +50,9 @@ def run_script(script_name):
     return result.stdout, result.stderr, result.returncode
 
 
-def run_unban_script(ip):
+def run_ip_script(script_name, ip):
     """Pass the validated IP via stdin to avoid putting user data on the command line."""
-    script = os.path.join(SCRIPTS_DIR, "crowdsec-unban.sh")
+    script = os.path.join(SCRIPTS_DIR, script_name)
     result = subprocess.run(
         ["sudo", script],
         input=ip,
@@ -135,13 +135,36 @@ def unban():
         write_audit("unban_rejected", ip, "invalid_ip", request.remote_addr)
         return jsonify({"error": "Invalid IP"}), 400
 
-    stdout, stderr, rc = run_unban_script(ip)
+    stdout, stderr, rc = run_ip_script("crowdsec-unban.sh", ip)
     if rc != 0:
         write_audit("unban", ip, f"failed: {stderr.strip()}", request.remote_addr)
         return jsonify({"error": stderr.strip()}), 500
 
     write_audit("unban", ip, "success", request.remote_addr)
     return jsonify({"ok": True, "ip": ip})
+
+
+@app.route("/ban", methods=["POST"])
+def ban():
+    check_secret()
+
+    if not request.is_json:
+        abort(400)
+
+    body = request.get_json(silent=True) or {}
+    ip = body.get("ip", "").strip()
+
+    if not ip or not VALID_IP_RE.match(ip):
+        write_audit("ban_rejected", ip, "invalid_ip", request.remote_addr)
+        return jsonify({"error": "Invalid IP"}), 400
+
+    stdout, stderr, rc = run_ip_script("crowdsec-ban.sh", ip)
+    if rc != 0:
+        write_audit("ban", ip, f"failed: {stderr.strip()}", request.remote_addr)
+        return jsonify({"error": stderr.strip()}), 500
+
+    write_audit("ban", ip, "success", request.remote_addr)
+    return jsonify({"ok": True, "ip": ip, "duration": "4h"})
 
 
 @app.route("/audit")

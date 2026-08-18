@@ -1,6 +1,6 @@
 # CrowdSec GUI v1
 
-A self-hosted admin GUI for [CrowdSec](https://crowdsec.net/) — view decisions, bans, and alerts; unban IPs; and audit all actions.
+A self-hosted admin GUI for [CrowdSec](https://crowdsec.net/) — view decisions, bans, and alerts; manually ban or unban IPs; and audit all actions.
 
 ## Architecture
 
@@ -20,9 +20,9 @@ Mounting the Docker socket into any container gives that container **root-equiva
 Instead, this project uses a **host-side helper service** that:
 - runs as an unprivileged dedicated user (`crowdsec-gui`)
 - listens only on `127.0.0.1`
-- is allowed to run only three specific scripts via `sudo` (list decisions, list alerts, unban IP)
+- is allowed to run only four specific scripts via `sudo` (list decisions, list alerts, ban IP, unban IP)
 - requires a shared secret header from the UI container
-- logs every unban action
+- logs every GUI-initiated ban and unban action
 
 The GUI container has **no Docker access at all**.
 
@@ -52,6 +52,7 @@ The GUI container has **no Docker access at all**.
 │   ├── requirements.txt
 │   ├── crowdsec-list-decisions.sh   ← calls docker exec crowdsec cscli decisions list
 │   ├── crowdsec-list-alerts.sh      ← calls docker exec crowdsec cscli alerts list
+│   ├── crowdsec-ban.sh              ← adds a fixed 4-hour manual IP ban
 │   ├── crowdsec-unban.sh            ← calls docker exec crowdsec cscli decisions delete
 │   ├── crowdsec-gui-helper.service  ← systemd unit
 │   └── sudoers.crowdsec-gui         ← sudoers snippet
@@ -198,9 +199,10 @@ sudo systemctl reload caddy
 
 - The helper binds **only to `127.0.0.1:9099`** — not reachable from outside.
 - The UI container reaches the helper via `host.docker.internal` (Linux: `host-gateway`).
-- All unban requests are **POST-only** with IP validation on both the UI and helper.
-- Unban actions are **audit-logged** with timestamp, IP, and source address.
-- The helper `sudo` rules allow **only three specific scripts** — no arbitrary commands.
+- All ban and unban requests are **POST-only** with IP validation on both the UI and helper.
+- Manual bans use a fixed **4-hour** duration and `manual_gui` reason; the UI cannot pass arbitrary CLI arguments.
+- Ban and unban actions are **audit-logged** with timestamp, IP, and source address.
+- The helper `sudo` rules allow **only four specific scripts** — no arbitrary commands.
 - Caddy handles TLS and basic auth before traffic ever reaches the UI container.
 - **Do not** add `NOPASSWD: ALL` to the sudoers file or mount the Docker socket.
 
@@ -211,9 +213,9 @@ sudo systemctl reload caddy
 | Page | URL | Description |
 |---|---|---|
 | Dashboard | `/` | Status overview, active ban count, recent alerts, your IP ban status |
-| Decisions | `/decisions` | Full list of active bans; filter by IP or scenario; unban buttons |
+| Decisions | `/decisions` | Full list of active bans; filter by IP or scenario; manual ban and unban controls |
 | Alerts | `/alerts` | Recent CrowdSec alerts; filter by source IP or scenario |
-| Audit | `/audit` | Log of all unban actions performed through the GUI |
+| Audit | `/audit` | Log of all ban and unban actions performed through the GUI |
 
 ---
 
