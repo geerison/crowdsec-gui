@@ -25,6 +25,7 @@ BAN_DURATIONS = {
     "24h": "24 hours",
     "168h": "7 days",
 }
+PERMANENT_BAN_SCENARIO = "manual_gui_permanent"
 
 
 def normalize_ip(value):
@@ -198,17 +199,29 @@ def decisions():
     if filter_scenario:
         data = [d for d in data if filter_scenario.lower() in d.get("scenario", "").lower()]
 
-    paged, page, total_pages, total = _paginate(data, page, per_page)
+    permanent_bans = [
+        decision
+        for decision in data
+        if decision.get("scenario") == PERMANENT_BAN_SCENARIO
+    ]
+    temporary_bans = [
+        decision
+        for decision in data
+        if decision.get("scenario") != PERMANENT_BAN_SCENARIO
+    ]
+    paged, page, total_pages, total = _paginate(temporary_bans, page, per_page)
 
     return render_template(
         "decisions.html",
         decisions=paged,
+        permanent_bans=permanent_bans,
         error=err,
         filter_ip=filter_ip,
         filter_scenario=filter_scenario,
         page=page,
         total_pages=total_pages,
-        total=total,
+        total=total + len(permanent_bans),
+        temporary_total=total,
         per_page=per_page,
         client_ip=get_client_ip(),
         ban_durations=BAN_DURATIONS,
