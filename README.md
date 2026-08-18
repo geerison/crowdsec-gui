@@ -190,7 +190,7 @@ sudo systemctl reload caddy
 | Variable | Where | Description |
 |---|---|---|
 | `HELPER_SECRET` | `.env` | Shared secret between UI container and helper. Must match on both sides. |
-| `FLASK_SECRET` | `.env` | Flask session signing key for the UI. Keep stable across restarts. |
+| `FLASK_SECRET` | `.env` | Required Flask session signing key for the UI. Keep stable across restarts; Compose refuses to start the UI without it. |
 | `HELPER_URL` | `docker-compose.yml` | URL to reach the helper. Default: `http://host.docker.internal:9099` |
 | `AUDIT_LOG` | helper `systemd` env or `.env` | Path to the audit log file. Default: `/opt/crowdsec-gui/helper/crowdsec-audit.log` |
 | `TRUSTED_PROXY_IPS` | `.env` | Comma-separated proxy source addresses trusted to set `X-Forwarded-For`. Default: loopback only. |

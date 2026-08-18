@@ -7,6 +7,7 @@ services:
     environment:
       - HELPER_URL=http://127.0.0.1:9099
       - HELPER_SECRET=${HELPER_SECRET}
+      - FLASK_SECRET=${FLASK_SECRET:?Set_FLASK_SECRET_in_.env}
       - TRUSTED_PROXY_IPS=${TRUSTED_PROXY_IPS:-127.0.0.1,::1}
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8088/health', timeout=3)"]
