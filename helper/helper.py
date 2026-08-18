@@ -63,6 +63,33 @@ def run_unban_script(ip):
     return result.stdout, result.stderr, result.returncode
 
 
+def normalize_decisions(data):
+    """Flatten decisions nested inside alerts by recent cscli JSON output."""
+    normalized = []
+
+    for item in data:
+        if not isinstance(item, dict):
+            continue
+
+        nested_decisions = item.get("decisions")
+        if not isinstance(nested_decisions, list):
+            normalized.append(item)
+            continue
+
+        for decision in nested_decisions:
+            if not isinstance(decision, dict):
+                continue
+
+            normalized.append(
+                {
+                    **decision,
+                    "scenario": decision.get("scenario") or item.get("scenario", ""),
+                }
+            )
+
+    return normalized
+
+
 @app.route("/health")
 def health():
     return jsonify({"ok": True}), 200
@@ -76,7 +103,7 @@ def decisions():
         return jsonify({"error": stderr.strip()}), 500
     try:
         data = json.loads(stdout)
-        return jsonify(data if data else [])
+        return jsonify(normalize_decisions(data) if data else [])
     except json.JSONDecodeError:
         return jsonify([])
 
