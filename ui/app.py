@@ -93,7 +93,9 @@ def helper_post(path, payload):
     except requests.exceptions.ConnectionError:
         return None, "Cannot reach helper service"
     except requests.exceptions.HTTPError as e:
-        return None, f"Helper error: {e.response.text if e.response else e}"
+        if e.response is not None and e.response.text:
+            return None, f"Helper error: {e.response.text}"
+        return None, f"Helper error: {e}"
     except Exception as e:
         return None, str(e)
 
