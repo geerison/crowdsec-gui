@@ -75,11 +75,11 @@ def run_script(script_name):
 
 
 def run_ip_script(script_name, ip):
-    """Pass the validated IP via stdin to avoid putting user data on the command line."""
+    """Pass newline-terminated validated input through stdin, never command-line args."""
     script = os.path.join(SCRIPTS_DIR, script_name)
     result = subprocess.run(
         ["sudo", script],
-        input=ip,
+        input=f"{ip}\n",
         capture_output=True,
         text=True,
         timeout=15,
