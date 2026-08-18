@@ -15,6 +15,7 @@ Cmnd_Alias  CROWDSEC_LIST  = \
 
 Cmnd_Alias  CROWDSEC_MANAGE = \
     /opt/crowdsec-gui/helper/crowdsec-unban.sh, \
-    /opt/crowdsec-gui/helper/crowdsec-ban.sh
+    /opt/crowdsec-gui/helper/crowdsec-ban.sh, \
+    /opt/crowdsec-gui/helper/crowdsec-permanent-ban.sh
 
 CROWDSECUI ALL=(root) NOPASSWD: CROWDSEC_LIST, CROWDSEC_MANAGE

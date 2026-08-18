@@ -35,7 +35,7 @@ curl -s http://127.0.0.1:9099/alerts -H "X-Helper-Secret: $(grep '^HELPER_SECRET
 - Audit page works
 - Charts render
 - Pagination works
-- Manual ban and unban work
+- 4-hour ban, 100-year ban, and unban work
 
 ## Reboot persistence
 ```bash

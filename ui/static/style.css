@@ -145,6 +145,8 @@ code { font-family: monospace; font-size: 0.85em; color: #7dd3fc; }
   white-space: nowrap;
 }
 .btn:hover { background: #475569; }
+.btn-warning { background: #9a3412; border-color: #c2410c; color: #fed7aa; }
+.btn-warning:hover { background: #c2410c; }
 .btn-danger { background: #7f1d1d; border-color: #991b1b; color: #fca5a5; }
 .btn-danger:hover { background: #991b1b; }
 .btn-secondary { background: #1e293b; }

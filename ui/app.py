@@ -201,6 +201,22 @@ def ban():
     return redirect(url_for("decisions"))
 
 
+@app.route("/ban/permanent", methods=["POST"])
+def permanent_ban():
+    ip = request.form.get("ip", "").strip()
+    if not ip or not VALID_IP_RE.match(ip):
+        flash(f"Invalid IP address: {ip}", "error")
+        return redirect(url_for("decisions"))
+
+    result, err = helper_post("/ban/permanent", {"ip": ip})
+    if err:
+        flash(f"Permanent ban failed: {err}", "error")
+    else:
+        flash(f"Banned {ip} for 100 years. Unban it to revoke the decision.", "success")
+
+    return redirect(url_for("decisions"))
+
+
 @app.route("/alerts")
 def alerts():
     filter_ip = request.args.get("ip", "").strip()

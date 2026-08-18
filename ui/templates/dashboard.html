@@ -68,8 +68,10 @@
   <h2>Manual Ban / Unban</h2>
   <form method="post" onsubmit="return confirm(this.dataset.confirmMessage || 'Perform this action?')">
     <input type="text" name="ip" placeholder="e.g. 1.2.3.4" required pattern="[0-9a-fA-F.:\\/]+" class="text-input">
-    <button type="submit" formaction="{{ url_for('ban') }}" class="btn btn-danger"
+    <button type="submit" formaction="{{ url_for('ban') }}" class="btn btn-warning"
             onclick="this.form.dataset.confirmMessage = 'Ban this IP for 4 hours?'">Ban (4h)</button>
+    <button type="submit" formaction="{{ url_for('permanent_ban') }}" class="btn btn-danger"
+            onclick="this.form.dataset.confirmMessage = 'Ban this IP for 100 years? Unban it to revoke the decision.'">Permanent (100y)</button>
     <button type="submit" formaction="{{ url_for('unban') }}" class="btn"
             onclick="this.form.dataset.confirmMessage = 'Unban this IP?'">Unban</button>
   </form>

@@ -146,6 +146,15 @@ def unban():
 
 @app.route("/ban", methods=["POST"])
 def ban():
+    return create_ban("crowdsec-ban.sh", "ban", "4h")
+
+
+@app.route("/ban/permanent", methods=["POST"])
+def permanent_ban():
+    return create_ban("crowdsec-permanent-ban.sh", "ban_permanent", "876000h")
+
+
+def create_ban(script_name, audit_action, duration):
     check_secret()
 
     if not request.is_json:
@@ -155,16 +164,16 @@ def ban():
     ip = body.get("ip", "").strip()
 
     if not ip or not VALID_IP_RE.match(ip):
-        write_audit("ban_rejected", ip, "invalid_ip", request.remote_addr)
+        write_audit(f"{audit_action}_rejected", ip, "invalid_ip", request.remote_addr)
         return jsonify({"error": "Invalid IP"}), 400
 
-    stdout, stderr, rc = run_ip_script("crowdsec-ban.sh", ip)
+    stdout, stderr, rc = run_ip_script(script_name, ip)
     if rc != 0:
-        write_audit("ban", ip, f"failed: {stderr.strip()}", request.remote_addr)
+        write_audit(audit_action, ip, f"failed: {stderr.strip()}", request.remote_addr)
         return jsonify({"error": stderr.strip()}), 500
 
-    write_audit("ban", ip, "success", request.remote_addr)
-    return jsonify({"ok": True, "ip": ip, "duration": "4h"})
+    write_audit(audit_action, ip, "success", request.remote_addr)
+    return jsonify({"ok": True, "ip": ip, "duration": duration})
 
 
 @app.route("/audit")
