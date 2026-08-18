@@ -3,6 +3,7 @@ import hmac
 import ipaddress
 import json
 import math
+import re
 import datetime
 import secrets
 import requests
@@ -26,6 +27,9 @@ BAN_DURATIONS = {
     "168h": "7 days",
 }
 PERMANENT_BAN_SCENARIO = "manual_gui_permanent"
+GO_DURATION_RE = re.compile(
+    r"^(?:(?P<hours>\d+)h)?(?:(?P<minutes>\d+)m)?(?:(?P<seconds>\d+(?:\.\d+)?)s)?$"
+)
 
 
 def normalize_ip(value):
@@ -114,6 +118,41 @@ def _paginate(data, page, per_page):
     page = max(1, min(page, total_pages))
     offset = (page - 1) * per_page
     return data[offset:offset + per_page], page, total_pages, total
+
+
+def human_duration(value):
+    if not isinstance(value, str):
+        return value
+
+    match = GO_DURATION_RE.fullmatch(value)
+    if not match:
+        return value
+
+    hours = int(match.group("hours") or 0)
+    minutes = int(match.group("minutes") or 0)
+    seconds = float(match.group("seconds") or 0)
+    total_seconds = hours * 3600 + minutes * 60 + seconds
+
+    if total_seconds >= 365 * 24 * 3600:
+        years = round(total_seconds / (365 * 24 * 3600))
+        return f"About {years} {'year' if years == 1 else 'years'}"
+    if hours >= 24:
+        days, remaining_hours = divmod(hours, 24)
+        parts = [f"{days} {'day' if days == 1 else 'days'}"]
+        if remaining_hours:
+            parts.append(f"{remaining_hours} {'hour' if remaining_hours == 1 else 'hours'}")
+        return " ".join(parts)
+    if hours:
+        parts = [f"{hours} {'hour' if hours == 1 else 'hours'}"]
+        if minutes:
+            parts.append(f"{minutes} {'minute' if minutes == 1 else 'minutes'}")
+        return " ".join(parts)
+    if minutes:
+        return f"{minutes} {'minute' if minutes == 1 else 'minutes'}"
+    return "Less than a minute"
+
+
+app.add_template_filter(human_duration, "human_duration")
 
 
 def _parse_alert_timestamp(value):

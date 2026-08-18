@@ -44,7 +44,7 @@
         <td>{{ d.type }}</td>
         <td>{{ d.scope }}</td>
         <td>{{ d.scenario }}</td>
-        <td>{{ d.duration }}</td>
+        <td title="{{ d.duration }}">{{ d.duration|human_duration }}</td>
         <td>{{ d.origin }}</td>
         <td>
           <form method="post" action="{{ url_for('unban') }}"
@@ -82,7 +82,7 @@
       <td>{{ d.type }}</td>
       <td>{{ d.scope }}</td>
       <td>{{ d.scenario }}</td>
-      <td>{{ d.duration }}</td>
+      <td title="{{ d.duration }}">{{ d.duration|human_duration }}</td>
       <td>{{ d.origin }}</td>
       <td>
         <div class="table-actions">
