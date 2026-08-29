@@ -1,15 +1,63 @@
 services:
+  crowdsec:
+    image: crowdsecurity/crowdsec:latest
+    container_name: crowdsec
+    environment:
+      COLLECTIONS: "crowdsecurity/linux crowdsecurity/nginx crowdsecurity/http-cve crowdsecurity/base-http-scenarios"
+      CUSTOM_HOSTNAME: "geerison.hu"
+      GEO_MAXMIND_FREE: "true"
+    volumes:
+      - ./crowdsec_data:/var/lib/crowdsec
+      - ./crowdsec_config:/etc/crowdsec
+      - /var/log:/var/log:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /docker/nginx-proxy/npm/data/logs:/npm-logs:ro
+    ports:
+      - "127.0.0.1:8090:8080"
+    networks:
+      - proxy_net
+    restart: always
+
   crowdsec-ui:
-    build: ./ui
+    build:
+      context: /docker/crowdsec-gui/ui
+      dockerfile: Dockerfile
     container_name: crowdsec-ui
     restart: unless-stopped
-    network_mode: host
+    networks:
+      - proxy_net
+    extra_hosts:
+      - "host-gateway:host-gateway"
     environment:
-      - HELPER_URL=http://127.0.0.1:9099
+      - HELPER_URL=http://host-gateway:9099
       - HELPER_SECRET=${HELPER_SECRET}
+      - FLASK_SECRET=${FLASK_SECRET}
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8088/health', timeout=3)"]
       interval: 30s
       timeout: 5s
       retries: 3
       start_period: 10s
+
+  firewall-bouncer:
+    image: ghcr.io/shgew/cs-firewall-bouncer-docker:latest
+    container_name: crowdsec-bouncer
+    network_mode: host
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      API_URL: "http://127.0.0.1:8090"
+      API_KEY: "ZaXJyAvSKTKAvGuykRURj4wQXx51UClOfTNhkSxB6y0"
+      CHAIN: DOCKER-USER
+    volumes:
+      - ./crowdsec_config/crowdsec-firewall-bouncer.yaml:/config/crowdsec-firewall-bouncer.yaml:ro
+    depends_on:
+      - crowdsec
+    restart: unless-stopped
+
+networks:
+  proxy_net:
+    external: true

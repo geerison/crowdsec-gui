@@ -14,8 +14,22 @@ from flask import Flask, request, jsonify, abort
 app = Flask(__name__)
 
 HELPER_SECRET = os.environ.get("HELPER_SECRET", "")
+HELPER_HOST = os.environ.get("HELPER_HOST", "127.0.0.1")
+HELPER_PORT = int(os.environ.get("HELPER_PORT", "9099"))
 AUDIT_LOG = os.environ.get("AUDIT_LOG", "/opt/crowdsec-gui/helper/crowdsec-audit.log")
 SCRIPTS_DIR = os.path.dirname(os.path.abspath(__file__))
+
+_DEFAULT_SECRET_VALUES = {"", "change_me_to_a_random_secret", "change-me"}
+
+
+def _check_secret_config():
+    """Warn at startup if HELPER_SECRET is missing or still set to a default value."""
+    if HELPER_SECRET in _DEFAULT_SECRET_VALUES:
+        app.logger.error(
+            "HELPER_SECRET is not set or is still the default placeholder. "
+            "All authenticated requests will be rejected (403). "
+            "Set a strong random value in /opt/crowdsec-gui/.env and restart the service."
+        )
 
 VALID_IP_RE = re.compile(
     r"^(\d{1,3}\.){3}\d{1,3}(/\d{1,2})?$"
@@ -25,11 +39,19 @@ VALID_IP_RE = re.compile(
 
 def check_secret():
     """Abort if the shared secret header is missing or wrong."""
-    if not HELPER_SECRET:
-        app.logger.error("HELPER_SECRET is not set — refusing authenticated endpoints.")
+    if HELPER_SECRET in _DEFAULT_SECRET_VALUES:
+        app.logger.error(
+            "HELPER_SECRET is not configured. "
+            "Set a strong random value in /opt/crowdsec-gui/.env and restart the service."
+        )
         abort(503)
     incoming = request.headers.get("X-Helper-Secret", "")
     if incoming != HELPER_SECRET:
+        app.logger.warning(
+            "Rejected request to %s — X-Helper-Secret header mismatch. "
+            "Ensure HELPER_SECRET matches in both the UI container and the helper service.",
+            request.path,
+        )
         abort(403)
 
 
@@ -131,5 +153,9 @@ def audit():
         return jsonify({"error": "Failed to read audit log"}), 500
 
 
+with app.app_context():
+    _check_secret_config()
+
+
 if __name__ == "__main__":
-    app.run(host="127.0.0.1", port=9099, debug=False)
+    app.run(host=HELPER_HOST, port=HELPER_PORT, debug=False)

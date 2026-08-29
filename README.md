@@ -187,17 +187,19 @@ sudo systemctl reload caddy
 
 | Variable | Where | Description |
 |---|---|---|
-| `HELPER_SECRET` | `.env` | Shared secret between UI container and helper. Must match on both sides. |
+| `HELPER_SECRET` | `.env` | Shared secret between UI container and helper. **Must be identical on both sides.** |
 | `FLASK_SECRET` | `.env` | Flask session signing key for the UI. Keep stable across restarts. |
-| `HELPER_URL` | `docker-compose.yml` | URL to reach the helper. Default: `http://host.docker.internal:9099` |
-| `AUDIT_LOG` | helper `systemd` env or `.env` | Path to the audit log file. Default: `/opt/crowdsec-gui/helper/crowdsec-audit.log` |
+| `HELPER_URL` | `docker-compose.yml` or `.env` | URL to reach the helper. Default: `http://127.0.0.1:9099` (correct for `network_mode: host`) |
+| `HELPER_HOST` | helper `.env` | Address the helper binds to. Default: `127.0.0.1` |
+| `HELPER_PORT` | helper `.env` | Port the helper binds to. Default: `9099` |
+| `AUDIT_LOG` | helper `.env` | Path to the audit log file. Default: `/opt/crowdsec-gui/helper/crowdsec-audit.log` |
 
 ---
 
 ## Security Notes
 
 - The helper binds **only to `127.0.0.1:9099`** — not reachable from outside.
-- The UI container reaches the helper via `host.docker.internal` (Linux: `host-gateway`).
+- The UI container reaches the helper via `127.0.0.1` (host network mode).
 - All unban requests are **POST-only** with IP validation on both the UI and helper.
 - Unban actions are **audit-logged** with timestamp, IP, and source address.
 - The helper `sudo` rules allow **only three specific scripts** — no arbitrary commands.
@@ -219,12 +221,38 @@ sudo systemctl reload caddy
 
 ## Troubleshooting
 
+**Dashboard shows "Helper returned 403 Forbidden — HELPER_SECRET mismatch":**
+
+This is the most common auth issue. It means the `HELPER_SECRET` value in the UI container does not match the value loaded by the helper service.
+
+1. Check the helper's loaded secret:
+   ```bash
+   sudo systemctl show crowdsec-gui-helper -p Environment
+   # Or inspect the env file:
+   sudo cat /opt/crowdsec-gui/.env | grep HELPER_SECRET
+   ```
+2. Check the UI container's secret:
+   ```bash
+   docker inspect crowdsec-ui | grep -A5 HELPER_SECRET
+   ```
+3. Ensure both sides have the **same** value. Edit `/docker/crowdsec-gui/.env` and `/opt/crowdsec-gui/.env` so `HELPER_SECRET` matches.
+4. Restart both:
+   ```bash
+   sudo systemctl restart crowdsec-gui-helper
+   cd /docker/crowdsec-gui && docker compose up -d
+   ```
+
+**Dashboard shows "Helper returned 503 — HELPER_SECRET is not configured":**
+
+The helper's `HELPER_SECRET` is empty or still the default placeholder.
+Set a strong value in `/opt/crowdsec-gui/.env` and restart the service.
+
 **Helper not reachable from UI container:**
 ```bash
 # On host, verify helper is listening:
 ss -tlnp | grep 9099
-# From host, test helper:
-curl -H "X-Helper-Secret: your_secret" http://127.0.0.1:9099/decisions
+# From host, test helper (replace YOUR_SECRET with your actual HELPER_SECRET):
+curl -H "X-Helper-Secret: YOUR_SECRET" http://127.0.0.1:9099/decisions
 ```
 
 **`docker exec` permission denied in helper:**
@@ -235,6 +263,12 @@ sudo -u crowdsec-gui sudo /opt/crowdsec-gui/helper/crowdsec-list-decisions.sh
 
 **CrowdSec container name mismatch:**
 If your CrowdSec container is not named `crowdsec`, edit the three shell scripts in `helper/` and change `crowdsec` to your container name.
+
+**Check helper and UI logs:**
+```bash
+journalctl -u crowdsec-gui-helper -n 50 --no-pager
+docker logs --tail 50 crowdsec-ui
+```
 
 ---
 
