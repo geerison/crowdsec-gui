@@ -10,13 +10,25 @@ from flask import Flask, render_template, request, redirect, url_for, flash, abo
 app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET", os.urandom(24))
 
-HELPER_URL = os.environ.get("HELPER_URL", "http://host.docker.internal:9099")
+HELPER_URL = os.environ.get("HELPER_URL", "http://127.0.0.1:9099")
 HELPER_SECRET = os.environ.get("HELPER_SECRET", "")
+
+_DEFAULT_SECRET_VALUES = {"", "change_me_to_a_random_secret", "change-me"}
 
 VALID_IP_RE = re.compile(
     r"^(\d{1,3}\.){3}\d{1,3}(/\d{1,2})?$"
     r"|^([0-9a-fA-F]{0,4}:){2,7}[0-9a-fA-F]{0,4}(/\d{1,3})?$"
 )
+
+
+def _check_secret_config():
+    """Warn at startup if HELPER_SECRET is missing or still set to a default value."""
+    if HELPER_SECRET in _DEFAULT_SECRET_VALUES:
+        app.logger.error(
+            "HELPER_SECRET is not set or is still the default placeholder. "
+            "All helper requests will be rejected (403). "
+            "Set a strong random value in .env and restart the UI container."
+        )
 
 
 def helper_headers():
@@ -31,7 +43,19 @@ def helper_get(path):
     except requests.exceptions.ConnectionError:
         return None, "Cannot reach helper service"
     except requests.exceptions.HTTPError as e:
-        return None, f"Helper error: {e}"
+        status = e.response.status_code if e.response is not None else "?"
+        if status == 403:
+            return None, (
+                "Helper returned 403 Forbidden — HELPER_SECRET mismatch. "
+                "Ensure the same HELPER_SECRET is set in both .env (for the UI) "
+                "and /opt/crowdsec-gui/.env (for the helper service), then restart both."
+            )
+        if status == 503:
+            return None, (
+                "Helper returned 503 — HELPER_SECRET is not configured on the helper. "
+                "Set HELPER_SECRET in /opt/crowdsec-gui/.env and restart crowdsec-gui-helper."
+            )
+        return None, f"Helper error {status}: {e}"
     except Exception as e:
         return None, str(e)
 
@@ -49,9 +73,25 @@ def helper_post(path, payload):
     except requests.exceptions.ConnectionError:
         return None, "Cannot reach helper service"
     except requests.exceptions.HTTPError as e:
-        return None, f"Helper error: {e.response.text if e.response else e}"
+        status = e.response.status_code if e.response is not None else "?"
+        if status == 403:
+            return None, (
+                "Helper returned 403 Forbidden — HELPER_SECRET mismatch. "
+                "Ensure the same HELPER_SECRET is set in both .env (for the UI) "
+                "and /opt/crowdsec-gui/.env (for the helper service), then restart both."
+            )
+        if status == 503:
+            return None, (
+                "Helper returned 503 — HELPER_SECRET is not configured on the helper. "
+                "Set HELPER_SECRET in /opt/crowdsec-gui/.env and restart crowdsec-gui-helper."
+            )
+        return None, f"Helper error {status}: {e.response.text if e.response else e}"
     except Exception as e:
         return None, str(e)
+
+
+with app.app_context():
+    _check_secret_config()
 
 
 def get_client_ip():
