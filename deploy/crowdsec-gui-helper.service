@@ -9,14 +9,14 @@ User=crowdsec-gui
 Group=crowdsec-gui
 WorkingDirectory=/opt/crowdsec-gui/helper
 EnvironmentFile=/opt/crowdsec-gui/.env
-ExecStart=/opt/crowdsec-gui/venv/bin/python /opt/crowdsec-gui/helper/helper.py
+ExecStart=/opt/crowdsec-gui/venv/bin/gunicorn --bind 127.0.0.1:9099 --workers 1 --timeout 30 helper:app
 Restart=on-failure
 RestartSec=5
 StandardOutput=journal
 StandardError=journal
 
 # Security hardening
-NoNewPrivileges=no
+NoNewPrivileges=yes
 PrivateTmp=yes
 ProtectSystem=strict
 ReadWritePaths=/opt/crowdsec-gui/helper

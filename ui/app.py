@@ -3,12 +3,19 @@ import re
 import json
 import math
 import datetime
+import hmac
+import secrets
 import requests
 from collections import Counter
-from flask import Flask, render_template, request, redirect, url_for, flash, abort
+from flask import Flask, render_template, request, redirect, url_for, flash, abort, session
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET", os.urandom(24))
+app.config.update(
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE="Lax",
+    SESSION_COOKIE_SECURE=os.environ.get("SESSION_COOKIE_SECURE", "true").lower() == "true",
+)
 
 HELPER_URL = os.environ.get("HELPER_URL", "http://127.0.0.1:9099")
 HELPER_SECRET = os.environ.get("HELPER_SECRET", "")
@@ -33,6 +40,25 @@ def _check_secret_config():
 
 def helper_headers():
     return {"X-Helper-Secret": HELPER_SECRET}
+
+
+def csrf_token():
+    token = session.get("csrf_token")
+    if token is None:
+        token = secrets.token_urlsafe(32)
+        session["csrf_token"] = token
+    return token
+
+
+@app.context_processor
+def csrf_context():
+    return {"csrf_token": csrf_token}
+
+
+def validate_csrf():
+    submitted = request.form.get("csrf_token", "")
+    if not hmac.compare_digest(submitted, session.get("csrf_token", "")):
+        abort(400)
 
 
 def helper_get(path):
@@ -211,6 +237,7 @@ def decisions():
 
 @app.route("/unban", methods=["POST"])
 def unban():
+    validate_csrf()
     ip = request.form.get("ip", "").strip()
     if not ip or not VALID_IP_RE.match(ip):
         flash(f"Invalid IP address: {ip}", "error")
